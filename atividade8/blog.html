@@ -1,1 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blog Messages</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="root"></div>
+</body>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script async src="https://ga.jspm.io/npm:es-module-shims@1.7.0/dist/es-module-shims.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react?dev",
+    "react-dom/client": "https://esm.sh/react-dom/client?dev"
+  }
+}
+</script>
+
+<script type="text/babel" data-type="module">
+import React, { StrictMode, useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBn3sALe1rYjz7Ze-Ik7q9TEVP0I2V3XX7GNcecWP8NvCzGt4yO_RT1OlQp09TE9cU/exec";
+
+function SearchBar({ filterText, onFilterTextChange }) {
+  return (
+    <div className="search-bar">
+      <label htmlFor="search-input">Procure uma mensagem:</label>
+      <input
+        id="search-input"
+        type="text"
+        value={filterText}
+        placeholder="Search..."
+        onChange={(e) => onFilterTextChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function MessageRow({ msg }) {
+  return (
+    <tr>
+      <td>{msg.author}</td>
+      <td>{msg.message}</td>
+      <td className="date-cell">{msg.date}</td>
+    </tr>
+  );
+}
+
+function MessageTable({ messages, filterText }) {
+  const filtered = messages.filter((msg) => {
+    const q = filterText.toLowerCase();
+    return (
+      (msg.author  && msg.author.toLowerCase().includes(q))  ||
+      (msg.message && msg.message.toLowerCase().includes(q)) ||
+      (msg.date    && msg.date.toLowerCase().includes(q))
+    );
+  });
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Author</th>
+          <th>Message</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan="3" style={{ textAlign: 'center', padding: '24px', color: '#888' }}>
+              Nenhuma mensagem encontrada.
+            </td>
+          </tr>
+        ) : (
+          filtered.map((msg, i) => <MessageRow key={i} msg={msg} />)
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function FilterableMessageTable({ messages }) {
+  const [filterText, setFilterText] = useState('');
+  return (
+    <div className="container">
+      <SearchBar filterText={filterText} onFilterTextChange={setFilterText} />
+      <MessageTable messages={messages} filterText={filterText} />
+    </div>
+  );
+}
+
+function App() {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error,   setError]     = useState(null);
+
+  function loadMessages() {
+    // Mesmo padrão do Blog4.html que funciona
+    fetch(SCRIPT_URL + "?_=" + Date.now())
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        // data = array de arrays: [[mensagem, autor, data], ...]
+        // ou array de objetos: [{message, author, date}, ...]
+        var normalized = [];
+        if (Array.isArray(data)) {
+          data.forEach(function(row) {
+            if (Array.isArray(row)) {
+              // formato [[msg, author, date], ...]
+              normalized.push({
+                message: String(row[0] || ""),
+                author:  String(row[1] || ""),
+                date:    row[2] ? new Date(row[2]).toLocaleString("pt-BR") : ""
+              });
+            } else {
+              // formato [{message, author, date}, ...]
+              normalized.push({
+                message: String(row.message || ""),
+                author:  String(row.author  || ""),
+                date:    row.date ? new Date(row.date).toLocaleString("pt-BR") : ""
+              });
+            }
+          });
+        }
+        setMessages(normalized);
+        setLoading(false);
+        setError(null);
+      })
+      .catch(function() {
+        setError("Erro ao carregar mensagens.");
+        setLoading(false);
+      });
+  }
+
+  useEffect(() => {
+    loadMessages();
+    const interval = setInterval(loadMessages, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="status-screen">
+        <div className="spinner"></div>
+        <p>Carregando mensagens…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="status-screen error">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  return <FilterableMessageTable messages={messages} />;
+}
+
+const root = createRoot(document.getElementById('root'));
+root.render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+</script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Mono', monospace;
+    background: #e8e6e1;
+    min-height: 100vh;
+    padding: 40px 20px;
+    color: #1a1a1a;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .search-bar {
+    margin-bottom: 24px;
+  }
+
+  .search-bar label {
+    display: block;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  .search-bar input {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    border: 1.5px solid #b0aca4;
+    background: #f5f3ef;
+    border-radius: 0;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-bar input:focus {
+    border-color: #1a1a1a;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #f5f3ef;
+    font-size: 13.5px;
+  }
+
+  thead tr {
+    background: #d4d0c8;
+    border-bottom: 2px solid #a09c94;
+  }
+
+  thead th {
+    padding: 12px 16px;
+    text-align: left;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #d4d0c8;
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: #eae7e0; }
+
+  tbody td {
+    padding: 10px 16px;
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  .date-cell {
+    white-space: nowrap;
+    color: #555;
+    font-size: 12.5px;
+  }
+
+  .status-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    color: #555;
+  }
+
+  .status-screen.error { color: #c0392b; }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #d4d0c8;
+    border-top-color: #1a1a1a;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</html>
 
